@@ -1,204 +1,202 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Informe Técnico</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div class="container">
-    <header>
-      <img src="logo.png" class="logo">
-      <h1> Informe Técnico</h1>
-    </header>
+<script>
+    // Función auxiliar para convertir archivos a Base64 (ya la tenías)
+    function toBase64(file){
+      return new Promise((resolve,reject)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>resolve(reader.result);
+        reader.onerror = e=>reject(e);
+        reader.readAsDataURL(file);
+      });
+    }
 
-    <div class="app">
-      <form id="reportForm">
-        <label>Cliente<input type="text" name="cliente"></label>
-        <label>Fecha<input type="date" name="fecha"></label>
-        <label>Técnico<input type="text" name="tecnico"></label>
-        <label>Descripción general<textarea name="descripcion"></textarea></label>
+    // NUEVA FUNCIÓN: Carga el logo de la URL (logo.png) y lo convierte a Base64
+    function getLogoBase64() {
+        return new Promise((resolve, reject) => {
+            const logoElement = document.querySelector('header .logo');
+            if (!logoElement) return reject("Elemento de logo no encontrado.");
 
-        <div class="items">
-          <h3>Items</h3>
-          <table id="itemsTable">
-            <thead>
-              <tr>
-                <th>Tipo de mobiliario</th><th>Cantidad</th><th>Estado</th><th>Fotos</th><th></th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-          <button type="button" class="btn ghost" onclick="addItem()">+ Agregar Item</button>
-        </div>
+            const imageUrl = logoElement.src;
+            const img = new Image();
+            img.crossOrigin = 'Anonymous'; // Importante para cargar imágenes de otras fuentes (aunque aquí es local)
 
-        <label>Tamaño del papel
-          <select id="paperSize">
-            <option value="a4">A4</option>
-            <option value="letter">Carta</option>
-          </select>
-        </label>
-        <button type="button" class="btn" onclick="generateReport()">Generar Informe</button>
-      </form>
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                // Aquí puedes ajustar el tipo de imagen si lo necesitas, pero png está bien.
+                resolve(canvas.toDataURL('image/png')); 
+            };
+            
+            img.onerror = function() {
+                console.error("No se pudo cargar la imagen del logo para Base64. Asegúrate de que 'logo.png' exista.");
+                // Resuelve con null para continuar la generación del PDF sin logo si falla.
+                resolve(null); 
+            };
 
-      <div class="sidebar">
-        <h3>Vista previa</h3>
-        <div id="preview" class="preview"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Librería pdfmake -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
-
-  <script>
-    function addItem(){
-      const tbody = document.querySelector("#itemsTable tbody");
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td><input type="text" class="desc"></td>
-        <td><input type="number" class="qty" value="1"></td>
-        <td>
-          <select class="state">
-            <option>Bueno</option>
-            <option>Regular</option>
-            <option>Malo</option>
-          </select>
-        </td>
-        <td><input type="file" class="photos" multiple accept="image/*"></td>
-        <td><button type="button" onclick="removeItem(this)">❌</button></td>
-      `;
-      tbody.appendChild(row);
-
-      // Nueva fila para OBS
-      const obsRow = document.createElement("tr");
-      obsRow.innerHTML = `
-        <td colspan="5">
-          <textarea class="obs" placeholder="Observaciones..."></textarea>
-        </td>
-      `;
-      tbody.appendChild(obsRow);
+            img.src = imageUrl;
+        });
     }
 
-    function removeItem(btn){
-      let row = btn.closest("tr");
-      let next = row.nextElementSibling;
-      if(next && next.querySelector(".obs")) next.remove();
-      row.remove();
-    }
+    function addItem(){
+      // ... (código de addItem sin cambios) ...
+      const tbody = document.querySelector("#itemsTable tbody");
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td><input type="text" class="desc"></td>
+        <td><input type="number" class="qty" value="1"></td>
+        <td>
+          <select class="state">
+            <option>Bueno</option>
+            <option>Regular</option>
+            <option>Malo</option>
+          </select>
+        </td>
+        <td><input type="file" class="photos" multiple accept="image/*"></td>
+        <td><button type="button" onclick="removeItem(this)">❌</button></td>
+      `;
+      tbody.appendChild(row);
 
-    async function generateReport(){
-      const form = document.getElementById("reportForm");
-      const data = {
-        cliente: form.cliente.value,
-        direccion: "",  // <--- ya no usamos dirección
-        fecha: form.fecha.value,
-        tecnico: form.tecnico.value,
-        descripcion: form.descripcion.value,
-        items:[]
-      };
+      // Nueva fila para OBS
+      const obsRow = document.createElement("tr");
+      obsRow.innerHTML = `
+        <td colspan="5">
+          <textarea class="obs" placeholder="Observaciones..."></textarea>
+        </td>
+      `;
+      tbody.appendChild(obsRow);
+    }
 
-      const rows = document.querySelectorAll("#itemsTable tbody tr");
-      for (let i=0; i<rows.length; i+=2){
-        const row = rows[i];
-        const obsRow = rows[i+1];
-        const desc = row.querySelector(".desc").value;
-        const qty = row.querySelector(".qty").value;
-        const state = row.querySelector(".state").value;
-        const obs = obsRow ? obsRow.querySelector(".obs").value : "";
-        const photosInput = row.querySelector(".photos");
-        const photos = [];
-        for (let file of photosInput.files){
-          const base64 = await toBase64(file);
-          photos.push(base64);
-        }
-        data.items.push({desc, qty, state, obs, photos});
+    function removeItem(btn){
+      // ... (código de removeItem sin cambios) ...
+      let row = btn.closest("tr");
+      let next = row.nextElementSibling;
+      if(next && next.querySelector(".obs")) next.remove();
+      row.remove();
+    }
+
+    async function generateReport(){
+      // 1. OBTENER LOGO EN BASE64
+      const logoBase64 = await getLogoBase64();
+
+      const form = document.getElementById("reportForm");
+      const data = {
+        cliente: form.cliente.value,
+        direccion: "",  
+        fecha: form.fecha.value,
+        tecnico: form.tecnico.value,
+        descripcion: form.descripcion.value,
+        items:[],
+        // 2. AÑADIR EL LOGO AL OBJETO DE DATOS
+        logoBase64: logoBase64 
+      };
+
+      // ... (recolección de ítems sin cambios) ...
+      const rows = document.querySelectorAll("#itemsTable tbody tr");
+      for (let i=0; i<rows.length; i+=2){
+        const row = rows[i];
+        const obsRow = rows[i+1];
+        const desc = row.querySelector(".desc").value;
+        const qty = row.querySelector(".qty").value;
+        const state = row.querySelector(".state").value;
+        const obs = obsRow ? obsRow.querySelector(".obs").value : "";
+        const photosInput = row.querySelector(".photos");
+        const photos = [];
+        for (let file of photosInput.files){
+          const base64 = await toBase64(file);
+          photos.push(base64);
+        }
+        data.items.push({desc, qty, state, obs, photos});
+      }
+
+      buildPreview(data);
+      createPDFwithPdfMake(data);
+    }
+
+    // ... (buildPreview sin cambios) ...
+    function buildPreview(data){
+      let html = `
+        <div class="report">
+          <header><h2>Informe Técnico de Visita</h2></header>
+          <div class="meta">
+            <p><strong>Cliente:</strong> ${data.cliente}</p>
+            <p><strong>Fecha:</strong> ${data.fecha}</p>
+            <p><strong>Técnico:</strong> ${data.tecnico}</p>
+          </div>
+          <h3>Descripción general</h3>
+          <p>${data.descripcion}</p>
+          <div class="item-list">`;
+
+      data.items.forEach(it=>{
+        html += `
+          <div class="item">
+            <strong>${it.desc}</strong>
+            <p>Cantidad: ${it.qty} | Estado: ${it.state}</p>
+            <p><em>Obs:</em> ${it.obs}</p>
+            <div class="photos">
+              ${it.photos.map(p=>`<img src="${p}" class="photo">`).join("")}
+            </div>
+          </div>`;
+      });
+
+      html += `</div></div>`;
+      document.getElementById("preview").innerHTML = html;
+    }
+    
+    function createPDFwithPdfMake(data) {
+      const itemsContent = data.items.map(it => {
+        // ... (mapeo de ítems sin cambios) ...
+        let photoRows = [];
+        for (let i = 0; i < it.photos.length; i += 3) {
+          photoRows.push({
+            columns: it.photos.slice(i, i+3).map(p => ({ image: p, width: 150, margin:[2,4,2,4] }))
+          });
+        }
+        return [
+          { text: it.desc || "Sin descripción", bold: true, margin:[0,5,0,2] },
+          { text: `Cantidad: ${it.qty || '0'} | Estado: ${it.state || '-'}` },
+          { text: `Obs: ${it.obs || '-'}`, margin:[0,0,0,5] },
+          ...photoRows,
+          { text: "", margin:[0,0,0,10] }
+        ];
+      }).flat();
+
+      // 3. ESTRUCTURA DEL ENCABEZADO CON EL LOGO
+      const headerContent = [
+          { text: 'Informe Técnico de Visita', style: 'header', width: '*' }
+      ];
+
+      // Añadir el logo SÓLO si se cargó correctamente en Base64
+      if (data.logoBase64) {
+          headerContent.unshift(
+              { image: data.logoBase64, width: 50, height: 50, alignment: 'left' } 
+          );
       }
 
-      buildPreview(data);
-      createPDFwithPdfMake(data);
-    }
+      const docDefinition = {
+        content: [
+          // USAMOS COLUMNS PARA ALINEAR EL LOGO Y EL TÍTULO
+          { columns: headerContent, columnGap: 10, margin:[0,0,0,10] }, 
 
-    function toBase64(file){
-      return new Promise((resolve,reject)=>{
-        const reader = new FileReader();
-        reader.onload = ()=>resolve(reader.result);
-        reader.onerror = e=>reject(e);
-        reader.readAsDataURL(file);
-      });
-    }
+          { text: `Cliente: ${data.cliente}`, margin:[0,2,0,0] },
+          { text: `Fecha: ${data.fecha}` },
+          { text: `Técnico: ${data.tecnico}`, margin:[0,0,0,10] },
+          { text: 'Descripción general', style: 'subheader' },
+          { text: data.descripcion || '-', margin:[0,0,0,10] },
+          ...itemsContent,
+          { text: `Documento generado el: ${new Date().toLocaleString()}`, fontSize:9, alignment:'right', margin:[0,20,0,0] }
+        ],
+        styles: {
+          header: { fontSize: 16, bold: true, alignment: 'right' }, // Ajustamos la alineación del título
+          subheader: { fontSize: 13, bold: true, margin:[0,5,0,5] }
+        },
+        pageSize: document.getElementById('paperSize').value === 'a4' ? 'A4' : 'LETTER',
+        pageMargins: [40,60,40,60]
+      };
 
-    function buildPreview(data){
-      let html = `
-        <div class="report">
-          <header><h2>Informe Técnico de Visita</h2></header>
-          <div class="meta">
-            <p><strong>Cliente:</strong> ${data.cliente}</p>
-            <p><strong>Fecha:</strong> ${data.fecha}</p>
-            <p><strong>Técnico:</strong> ${data.tecnico}</p>
-          </div>
-          <h3>Descripción general</h3>
-          <p>${data.descripcion}</p>
-          <div class="item-list">`;
-
-      data.items.forEach(it=>{
-        html += `
-          <div class="item">
-            <strong>${it.desc}</strong>
-            <p>Cantidad: ${it.qty} | Estado: ${it.state}</p>
-            <p><em>Obs:</em> ${it.obs}</p>
-            <div class="photos">
-              ${it.photos.map(p=>`<img src="${p}" class="photo">`).join("")}
-            </div>
-          </div>`;
-      });
-
-      html += `</div></div>`;
-      document.getElementById("preview").innerHTML = html;
-    }
-
-    function createPDFwithPdfMake(data) {
-      const itemsContent = data.items.map(it => {
-        let photoRows = [];
-        for (let i = 0; i < it.photos.length; i += 3) {
-          photoRows.push({
-            columns: it.photos.slice(i, i+3).map(p => ({ image: p, width: 150, margin:[2,4,2,4] }))
-          });
-        }
-        return [
-          { text: it.desc || "Sin descripción", bold: true, margin:[0,5,0,2] },
-          { text: `Cantidad: ${it.qty || '0'} | Estado: ${it.state || '-'}` },
-          { text: `Obs: ${it.obs || '-'}`, margin:[0,0,0,5] },
-          ...photoRows,
-          { text: "", margin:[0,0,0,10] }
-        ];
-      }).flat();
-
-      const docDefinition = {
-        content: [
-          { text: 'Informe Técnico de Visita', style: 'header' },
-          { text: `Cliente: ${data.cliente}`, margin:[0,2,0,0] },
-          { text: `Fecha: ${data.fecha}` },
-          { text: `Técnico: ${data.tecnico}`, margin:[0,0,0,10] },
-          { text: 'Descripción general', style: 'subheader' },
-          { text: data.descripcion || '-', margin:[0,0,0,10] },
-          ...itemsContent,
-          { text: `Documento generado el: ${new Date().toLocaleString()}`, fontSize:9, alignment:'right', margin:[0,20,0,0] }
-        ],
-        styles: {
-          header: { fontSize: 16, bold: true, margin:[0,0,0,10] },
-          subheader: { fontSize: 13, bold: true, margin:[0,5,0,5] }
-        },
-        pageSize: document.getElementById('paperSize').value === 'a4' ? 'A4' : 'LETTER',
-        pageMargins: [40,60,40,60]
-      };
-
-      pdfMake.createPdf(docDefinition).download(
-        `informe_${(data.cliente||'sin_cliente').replace(/\s+/g,'_')}_${data.fecha||''}.pdf`
-      );
-    }
-  </script>
-</body>
-</html>
+      pdfMake.createPdf(docDefinition).download(
+        `informe_${(data.cliente||'sin_cliente').replace(/\s+/g,'_')}_${data.fecha||''}.pdf`
+      );
+    }
+  </script>
